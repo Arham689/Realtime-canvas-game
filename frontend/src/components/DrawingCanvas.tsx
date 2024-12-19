@@ -1,6 +1,7 @@
 
 import React, {useEffect, useRef, useState} from 'react';
 import socket from './socket'
+import { useLocation, useParams } from 'react-router-dom';
 
 const DrawingCanvas = () => {
     const canvasRef = useRef<HTMLCanvasElement | null >(null);
@@ -8,10 +9,22 @@ const DrawingCanvas = () => {
 
     const [isDrawing, setIsDrawing] = useState<boolean>(false);
 
+    const location = useLocation();
+    const queryParams = new URLSearchParams(location.search);
+    const name = queryParams.get("name"); 
+
+    const {id} = useParams()
+    const roomId = id 
     useEffect(() => {
-        socket.on('connect', () => {
+        socket.on('connect', () => {    
             console.log('Connected to server:', socket.id);
         });
+
+        socket.emit('join-room', { roomId , name  })
+
+        socket.on('user-joined' , ({name , roomId })=>{
+            console.log(name , roomId)
+        })
 
         const canvas = canvasRef.current;
         if(!canvas) return ;
@@ -137,8 +150,8 @@ const DrawingCanvas = () => {
         }
     
         // const {offsetX, offsetY} = event.nativeEvent;
-        socket.emit('startDrawing' , { x , y })
-        socket.emit('cords' , { x , y } )
+        socket.emit('startDrawing' , { id , arg: { x , y } })
+        // socket.emit('cords' , { x , y } )
 
         ctx.beginPath();
         ctx.moveTo(x , y );
@@ -168,9 +181,9 @@ const DrawingCanvas = () => {
             y = touchY;
         }
 
-        console.log(x , y)
+        // console.log(x , y)
         // socket.emit('cords' , { x , y } )
-        socket.emit('draw' , { x , y })
+        socket.emit('draw' , { id , arg : { x , y }})
         ctx.lineTo(x, y);
         ctx.stroke();
         // event.preventDefault();
@@ -180,7 +193,7 @@ const DrawingCanvas = () => {
         const ctx = contextRef.current;
         if(!ctx) return ; 
 
-        socket.emit('stopDrawing')
+        socket.emit('stopDrawing' , {id})
         ctx.closePath();
         setIsDrawing(false);
     };
@@ -191,7 +204,7 @@ const DrawingCanvas = () => {
 
         ctx.globalCompositeOperation = 'source-over';
         ctx.lineWidth = 5 ; 
-        socket.emit('drawing')
+        socket.emit('drawing' , {id})
     };
 
     const setToErase = () => {
@@ -200,7 +213,7 @@ const DrawingCanvas = () => {
 
        ctx.globalCompositeOperation = 'destination-out';
        ctx.lineWidth = 50 ; 
-       socket.emit('eraseing')
+       socket.emit('eraseing' , { id })
     };
 
     const drawLine = ( x : any , y : any ) =>{
@@ -217,8 +230,8 @@ const DrawingCanvas = () => {
         if(!ctx) return ; 
 
         ctx.beginPath();
-        ctx.moveTo(e.x , e.y );
-        ctx.lineTo(e.x , e.y );
+        ctx.moveTo(e.x , e?.y );
+        ctx.lineTo(e.x , e?.y );
         ctx.stroke();
     }
 
