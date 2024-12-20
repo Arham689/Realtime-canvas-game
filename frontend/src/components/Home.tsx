@@ -14,10 +14,11 @@ const Home = () => {
       }
 
     return (
-        <div className="flex justify-center items-center w-screen h-screen bg-gray-900">
+        <div className="flex justify-center items-center w-screen h-screen bg-blue-300">
   <form
     onSubmit={handleSubmit}
-    className="space-y-6 rounded-lg p-6 bg-gray-800 shadow-[5px_5px_rgba(0,_112,_184,_0.4),_10px_10px_rgba(0,_112,_184,_0.3),_15px_15px_rgba(0,_112,_184,_0.2),_20px_20px_rgba(0,_112,_184,_0.1),_25px_25px_rgba(0,_112,_184,_0.05)] w-full max-w-md"
+    className="space-y-6 rounded-lg p-6 bg-gray-800 shadow-[5px_5px_rgba(75,_85,_99,_0.4),_10px_10px_rgba(75,_85,_99,_0.3),_15px_15px_rgba(75,_85,_99,_0.2),_20px_20px_rgba(75,_85,_99,_0.1)]
+ w-full max-w-md"
   >
     <div>
       <label
