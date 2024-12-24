@@ -60,24 +60,82 @@ app.get('/' , (req , res )=>{
 //     }
 // )
 
-
+let room = require('./rooms')
+let player = require('./player')
+let utils = require('./utils')
+let Rooms = [] 
+let activePlayers = [] ;
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
     // Join a room
     socket.on('join-room', ({ roomId, name }) => {
-        socket.join(roomId);
+
         console.log(`${name} joined room ${roomId}`);
 
+        const existingPlayer = activePlayers.find(
+            player => player.name === name && player.roomId === roomId
+          );
+      
+          if (!existingPlayer) {
+            // Add new player
+            activePlayers.push({ name, roomId, id: socket.id });
+            console.log(`Player added: ${name}, Room: ${roomId}`);
+          } else {
+            // Update the player's socket ID
+            existingPlayer.id = socket.id;
+            console.log(`Player reconnected: ${name}, Room: ${roomId}`);
+          }
+
+        if (!roomId || !name)
+            return;
+
+        if (!Rooms[roomId]) {
+            Rooms[roomId] = new room(roomId, 1234);
+            Rooms[roomId].players.push(new player(socket, name, true));
+            Rooms[roomId].words = utils.generateRdmWords();
+            socket.join(roomId);
+            socket['room'] = roomId;
+            socket['name'] = name;
+            io.in(roomId).emit('chat', {user: name, connected: true});
+            socket.emit('draw', Rooms[roomId].words);
+            socket.emit('players', [{name: name, score: 0}]);
+            io.emit('rooms', utils.getListOfRooms(Rooms));
+        } else {
+            Rooms[roomId].players.push(new player(socket, name, false));
+            socket.join(roomId);
+            socket['room'] = roomId;
+            socket['name'] = name;
+            io.in(roomId).emit('chat', {user: name, connected: true});
+            socket.emit('guess', Rooms[roomId].players[Rooms[roomId].drawing].name);
+            if (Rooms[roomId].word)
+                socket.emit('word', Rooms[roomId].hiddenWord);
+            io.in(roomId).emit('players', utils.getListOfPlayers(Rooms[roomId]));
+        }
+
+        console.log(activePlayers)
         // Notify others in the room
-        socket.to(roomId).emit('user-joined', { name ,roomId });
+        io.to(roomId).emit('user-joined', { name ,roomId , activePlayers});
     });
 
-    // Handle cords event within a room
-    // socket.on('cords', ({ roomId, arg }) => {
-    //     console.log(`Cords from room ${roomId}:`, arg);
-    //     socket.to(roomId).emit('UpdatedCords', arg);
-    // });
+    
+    socket.on('word', (word) => {
+        Rooms[socket['room']].word = word;
+        Rooms[socket['room']].hiddenWord = utils.hideWord(word.cleanString());
+        socket.to(socket['room']).emit('word', Rooms[socket['room']].hiddenWord);
+        socket.emit('word', word);
+        Rooms[socket['room']].clockInterval = setInterval(() => {
+            Rooms[socket['room']].clock -= 1000;
+            io.in(socket['room']).emit('clock', Rooms[socket['room']].clock);
+        }, 1000);
+        Rooms[socket['room']].hintTimeout = setTimeout(() => {
+            Rooms[socket['room']].hiddenWord = utils.hideWord(word.cleanString(), true);
+            socket.to(socket['room']).emit('word', Rooms[socket['room']].hiddenWord);
+        }, 30000);
+        Rooms[socket['room']].skipTimeout = setTimeout(() => {
+            Rooms[socket['room']].skipRound(io);
+        }, 60000);
+    });
 
     // Start drawing within a room
     socket.on('startDrawing', ({ id, arg }) => {
@@ -85,8 +143,8 @@ io.on('connection', (socket) => {
     });
 
     // Draw within a room
-    socket.on('draw', ({ id, arg }) => {
-        socket.to(id).emit('draw', arg);
+    socket.on('drawline', ({ id, arg }) => {
+        socket.to(id).emit('drawline', arg);
     });
 
     // Stop drawing within a room
@@ -115,8 +173,14 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect' , ()=>{
         console.log('User disconnected:', socket.id)
+
+        activePlayers = activePlayers.filter(playerId => playerId.id !== socket.id);
+        console.log(`Active players: ${activePlayers}`);
     })
 });
 
+String.prototype.cleanString = function () {
+    return this.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
 
 server.listen(3001)

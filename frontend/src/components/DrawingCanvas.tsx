@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import socket from './socket'
 import { useLocation, useParams } from 'react-router-dom';
+import { setDefaultResultOrder } from 'dns';
 
 const DrawingCanvas = () => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -9,12 +10,22 @@ const DrawingCanvas = () => {
 
     const [isDrawing, setIsDrawing] = useState<boolean>(false);
     const [isDrawingSelected, setIsDrawingSelected] = useState<boolean>(true)
+    // const [activePlayeres, setActivePlayeres] = useState([])
     const location = useLocation();
     const queryParams = new URLSearchParams(location.search);
     const name = queryParams.get("name");
 
     const { id } = useParams()
     const roomId = id
+
+    const [drawing, setDrawing] = useState<boolean>(false);
+    const [guess, setGuess] = useState(true);
+    const [wait, setWait] = useState(false);
+    const [playerDrawing, setPlayerDrawing] = useState('');
+    const [words, setWords] = useState<string[]>([]);
+    const selectTimeout = useRef<NodeJS.Timeout | null >(null);
+
+    
     useEffect(() => {
         socket.on('connect', () => {
             console.log('Connected to server:', socket.id);
@@ -26,7 +37,9 @@ const DrawingCanvas = () => {
         
         socket.emit('join-room', { roomId, name })
 
-        socket.on('user-joined', ({ name, roomId }) => {
+        socket.on('user-joined', ({ name, roomId , activePlayers}) => {
+            // setActivePlayeres(...activePlayeres)
+            console.log(activePlayers)
             console.log(name, roomId)
         })
 
@@ -75,7 +88,7 @@ const DrawingCanvas = () => {
             // ctx.stroke();
             startDrawingline(e)
         })
-        socket.on('draw', (e) => {
+        socket.on('drawline', (e) => {
             // const ctx = contextRef.current ;
             // if(!ctx) return ;
 
@@ -106,6 +119,12 @@ const DrawingCanvas = () => {
             ctx.globalCompositeOperation = 'destination-out';
             ctx.lineWidth = 50;
         })
+
+        socket.on('draw' , handleDraw )
+        socket.on("guess", handleGuess);
+        socket.on('word' , ()=>{
+            setWait(false)
+        })
         canvas.addEventListener("touchstart", handleTouchStart, { passive: false });
         canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
         canvas.addEventListener("touchend", handleTouchEnd, { passive: false });
@@ -121,7 +140,22 @@ const DrawingCanvas = () => {
 
     }, []);
 
+    const handleDraw = (words : string[] ) =>{
+        setGuess(false)
+        setWords(words)
+        console.log(words)
+        setWait(true)
+        selectTimeout.current = setTimeout(() => {
+            sendWord(words[Math.floor(Math.random() * 3)]); // send ramdome word out of 3 
+          }, 10000);
+    }
 
+    const handleGuess = (player : string)=>{
+        setGuess(true);
+        setDrawing(false);
+        setPlayerDrawing(player);
+        setWait(true);
+    }
 
     const getTouchPos = (event: React.TouchEvent<HTMLCanvasElement>) => {
         const canvas = canvasRef.current;
@@ -139,7 +173,9 @@ const DrawingCanvas = () => {
     const startDrawing = (event: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
         const ctx = contextRef.current;
         if (!ctx) return;
-
+        if ( guess ) return;
+        setDrawing(true)
+        console.log(drawing)
         let x, y;
         if (event.type === "mousedown") {
             // Mouse event
@@ -172,6 +208,8 @@ const DrawingCanvas = () => {
         const ctx = contextRef.current;
         if (!ctx) return;
 
+        if (!drawing) return;
+
         let x, y;
         if (event.type === "mousemove") {
             // Mouse event
@@ -187,7 +225,8 @@ const DrawingCanvas = () => {
 
         // console.log(x , y)
         // socket.emit('cords' , { x , y } )
-        socket.emit('draw', { id, arg: { x, y } })
+        if (guess || wait) return;
+        socket.emit('drawline', { id, arg: { x, y } })
         ctx.lineTo(x, y);
         ctx.stroke();
         // event.preventDefault();
@@ -254,16 +293,64 @@ const DrawingCanvas = () => {
         if (!ctx) return;
 
         ctx.closePath();
-
     }
+
+    const sendWord = (word : string) =>{
+        if(selectTimeout.current)
+        clearTimeout(selectTimeout.current)
+        socket.emit('word' , word )
+        setWait(false)
+    }
+    const clearBoard = () => {
+        const ctx = contextRef.current;
+        if (!ctx) return;
+
+        if(!canvasRef.current) return 
+
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      };
+
+    const selectWord = () => {
+        clearBoard();
+        return (
+          <div className="flex justify-center items-center absolute -z-1 w-[750px] h-[650px] rounded-md  flex-col bg-[#00000074]" id="choose-word">
+            <p>Choose a word to draw!</p>
+            <div>
+              {words.map((word, index) => (
+                <div
+                  key={index}
+                  className="selectWord"
+                  onClick={() => sendWord(word)}
+                >
+                  {word}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      };
+    
+      const waitWordSelect = () => {
+        clearBoard();
+        return (
+          <div className="wait-box flex justify-center items-center absolute -z-1 w-[750px] h-[650px] rounded-md  flex-col bg-[#00000074]">
+            <p id="wait-player">{playerDrawing} is choosing a word</p>
+          </div>
+        );
+      };
+    
     return (
-        <div>
+        <div className='w-[750px] h-[650px]'>
+            {wait && guess ? waitWordSelect() : ""}
+            {wait && !guess ? selectWord() : ""}
             <canvas className="canvas-container bg-white rounded-md"
                 ref={canvasRef}
                 onMouseDown={startDrawing}
                 onMouseMove={draw}
                 onMouseUp={stopDrawing}
                 onMouseLeave={stopDrawing}
+
                 onTouchStart={startDrawing}
                 onTouchMove={draw}
                 onTouchEnd={stopDrawing}
