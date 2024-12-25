@@ -22,44 +22,6 @@ app.get('/' , (req , res )=>{
     res.send('hello from the home ')
 })
 
-// io.on("connection" ,(socket)=>{
-//     socket.on("cords", (arg) => {
-//         console.log(arg); // world
-//         // socket.broadcast.emit("UpdatedCords", arg );
-//     });
-
-//     socket.on('startDrawing' , (arg)=>{
-//         socket.broadcast.emit('startDrawing' , arg ) 
-//     })
-    
-//     socket.on('draw' , (arg)=>{
-//         socket.broadcast.emit('draw' , arg ) 
-//     })
-
-//     socket.on('stopDrawing' , ()=>{
-//         socket.broadcast.emit('stopDrawing') 
-//     })
-        
-//     socket.on('drawing' , ()=>{
-//         socket.broadcast.emit('drawing')
-//     })
-
-//     socket.on('eraseing' , ()=>{
-//         socket.broadcast.emit('eraseing')
-//     })
-//     console.log('userc connected ')
-//     console.log('id' , socket.id)
-
-// })
-
-// io.on('connection', (socket) => {
-//         socket.on('join-room', ({ roomId, name }) => {
-//             socket.join(roomId)
-//             socket.to(roomId).emit('user-joined', { name })
-//         })
-//     }
-// )
-
 let room = require('./rooms')
 let player = require('./player')
 let utils = require('./utils')
@@ -136,7 +98,68 @@ io.on('connection', (socket) => {
             Rooms[socket['room']].skipRound(io);
         }, 60000);
     });
+     
+    socket.on('chat', (message) => {
+        const tmpRoom = Rooms[socket['room']];
+        if (!message.user || !message.text || Rooms[socket['room']].players.find(p => p.name === message.user).foundWord)
+            return;
+        if (message.user !== tmpRoom.players[tmpRoom.drawing].name && message.text.cleanString() === tmpRoom.word.cleanString()) {
+            io.in(socket['room']).emit('chat', {user: message.user, text: message.text, found: true});
+            Rooms[socket['room']].playerFoundWord(message.user);
+            io.in(socket['room']).emit('players', utils.getListOfPlayers(Rooms[socket['room']]));
+            Rooms[socket['room']].checkEndRound(io);
+        } else if (message.user !== tmpRoom.players[tmpRoom.drawing].name && utils.compareWordsWithTolerance(message.text.cleanString(), tmpRoom.word.cleanString())) {
+            socket.emit('chat', {text: message.text, close: true});
+        } else {
+            io.in(socket['room']).emit('chat', message);
+        }
+    });
 
+    socket.on('disconnect', () => {
+        if (!Rooms[socket['room']])
+            return;
+        if (Rooms[socket['room']].players.length === 1) {
+            Rooms[socket['room']].skipRound(io);
+            let roomTmp = [];
+            Object.values(Rooms).forEach(room => {
+                if (room.name !== socket['room'])
+                    roomTmp[room.name] = room;
+            });
+            Rooms = roomTmp;
+            io.emit('rooms', utils.getListOfRooms(Rooms));
+            return;
+        }
+        if (Rooms[socket['room']].players[Rooms[socket['room']].drawing].name === socket['name']) {
+            Rooms[socket['room']].drawing -= 1;
+            Rooms[socket['room']].players = Rooms[socket['room']].players.filter(p => p.name !== socket['name']);
+            Rooms[socket['room']].skipRound(io);
+        } else {
+            Rooms[socket['room']].players = Rooms[socket['room']].players.filter(p => p.name !== socket['name']);
+        }
+        io.in(socket['room']).emit('chat', {user: socket['name'], disconnected: true});
+        io.in(socket['room']).emit('players', utils.getListOfPlayers(Rooms[socket['room']]));
+    });
+
+    socket.on('winner', ({ roomName, winner }) => {
+        // Check if the room exists
+        if (!Rooms[roomName]) {
+          console.error(`Room ${roomName} does not exist.`);
+          return;
+        }
+      
+        // Broadcast the winner message to all sockets in the room
+        io.in(roomName).emit('winner', { roomName, winner });
+      
+        // Remove the room from the Rooms object
+        delete Rooms[roomName];
+      
+        // Notify all clients about the updated list of rooms
+        io.emit('rooms', utils.getListOfRooms(Rooms));
+      
+        console.log(winner , roomName)
+    });
+
+    socket.on('clear', () => io.in(socket['room']).emit('clear'));
     // Start drawing within a room
     socket.on('startDrawing', ({ id, arg }) => {
         socket.to(id).emit('startDrawing', arg);
@@ -173,10 +196,11 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect' , ()=>{
         console.log('User disconnected:', socket.id)
-
         activePlayers = activePlayers.filter(playerId => playerId.id !== socket.id);
         console.log(`Active players: ${activePlayers}`);
     })
+
+    socket.on('rooms', () => socket.emit('rooms', utils.getListOfRooms(Rooms)));
 });
 
 String.prototype.cleanString = function () {

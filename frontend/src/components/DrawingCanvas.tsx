@@ -2,7 +2,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import socket from './socket'
 import { useLocation, useParams } from 'react-router-dom';
-import { setDefaultResultOrder } from 'dns';
+import WinnerPage from './WinnerPage';
+
 
 const DrawingCanvas = () => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -10,6 +11,7 @@ const DrawingCanvas = () => {
 
     const [isDrawing, setIsDrawing] = useState<boolean>(false);
     const [isDrawingSelected, setIsDrawingSelected] = useState<boolean>(true)
+    const [winner, setWinner] = useState<any>(null)
     // const [activePlayeres, setActivePlayeres] = useState([])
     const location = useLocation();
     const queryParams = new URLSearchParams(location.search);
@@ -120,6 +122,7 @@ const DrawingCanvas = () => {
             ctx.lineWidth = 50;
         })
 
+        socket.on('winner' , handleWinner )
         socket.on('draw' , handleDraw )
         socket.on("guess", handleGuess);
         socket.on('word' , ()=>{
@@ -140,10 +143,17 @@ const DrawingCanvas = () => {
 
     }, []);
 
+    const handleWinner =({winnerData} : any)=>{
+        console.log(winnerData)
+        setWinner(winnerData)
+    }
+
+    
+
     const handleDraw = (words : string[] ) =>{
         setGuess(false)
         setWords(words)
-        console.log(words)
+        // console.log(words)
         setWait(true)
         selectTimeout.current = setTimeout(() => {
             sendWord(words[Math.floor(Math.random() * 3)]); // send ramdome word out of 3 
@@ -314,13 +324,13 @@ const DrawingCanvas = () => {
     const selectWord = () => {
         clearBoard();
         return (
-          <div className="flex justify-center items-center absolute -z-1 w-[750px] h-[650px] rounded-md  flex-col bg-[#00000074]" id="choose-word">
+          <div className="flex justify-center text-2xl gap-2 items-center absolute -z-1 w-[750px] h-[650px] rounded-md  flex-col bg-[#00000074]" id="choose-word">
             <p>Choose a word to draw!</p>
-            <div>
+            <div className='flex gap-7  '>
               {words.map((word, index) => (
                 <div
                   key={index}
-                  className="selectWord"
+                  className="selectWord bg-white border-[2px] border-black rounded-md p-1 text-xl"
                   onClick={() => sendWord(word)}
                 >
                   {word}
@@ -340,8 +350,11 @@ const DrawingCanvas = () => {
         );
       };
     
-    return (
-        <div className='w-[750px] h-[650px]'>
+    return (<>
+        {winner ? 
+           <WinnerPage winner={winner}/>
+         :
+            <div className='w-[750px] h-[650px]'>
             {wait && guess ? waitWordSelect() : ""}
             {wait && !guess ? selectWord() : ""}
             <canvas className="canvas-container bg-white rounded-md"
@@ -350,11 +363,11 @@ const DrawingCanvas = () => {
                 onMouseMove={draw}
                 onMouseUp={stopDrawing}
                 onMouseLeave={stopDrawing}
-
+                
                 onTouchStart={startDrawing}
                 onTouchMove={draw}
                 onTouchEnd={stopDrawing}
-            >
+                >
 
             </canvas>
             <div className='flex gap-5'>
@@ -369,7 +382,8 @@ const DrawingCanvas = () => {
                     Erase
                 </button>
             </div>
-        </div>
+        </div>}
+    </>
     )
 }
 

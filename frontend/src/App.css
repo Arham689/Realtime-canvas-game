@@ -2,3 +2,48 @@
   max-width: 1280px;
   box-sizing: border-box;
 }
+
+
+.user {
+  font-weight: bold;
+}
+
+.user-connected {
+  font-weight: bold;
+  color: limegreen;
+}
+
+.user-disconnected {
+  font-weight: bold;
+  color: tomato;
+}
+
+.user-win {
+  font-weight: bold;
+  color: gold;
+}
+
+.user-close {
+  font-weight: bold;
+  color: #03A9F4;
+}
+
+.end-round {
+  font-weight: bold;
+  color: #282c34;
+}
+
+.player-box {
+  padding: 4px 4px 4px 10px;
+  border-radius: 2px;
+  background-color: white;
+  margin-bottom: 5px;
+}
+
+.player-box-me {
+  padding: 4px 4px 4px 10px;
+  border-radius: 2px;
+  background-color: white;
+  color: #03A9F4;
+  margin-bottom: 5px;
+}

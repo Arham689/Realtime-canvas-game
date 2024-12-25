@@ -35,13 +35,13 @@ exports.hideWord = (word, hint) => {
     if (hint) {
         let tmpWord = word;
         let rdmLetter = '';
-        word = word.replace(/\w/g, '_');
+        word = word.replace(/\w/g, '-');
         do {
              rdmLetter = tmpWord.split('')[(Math.floor(Math.random() * (tmpWord.length - 1)))];
         } while (!rdmLetter.match(/\w/));
         word = word.replaceAt(tmpWord.indexOf(rdmLetter), rdmLetter);
     } else
-        word = word.replace(/\w/g, '_');
+        word = word.replace(/\w/g, '-');
     return word;
 }
 
